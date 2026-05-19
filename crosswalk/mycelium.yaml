@@ -1,0 +1,326 @@
+# crosswalk/mycelium.yaml
+#
+# Maps Mycelium Trails (argentum-core) primitives to the canonical vocabulary
+# defined in vocabulary.yaml v0.1.
+#
+# Mycelium is a tamper-evident trail layer for agent actions. Every action
+# produces a TrailRecord anchored on-chain (Base/Arbitrum). TrailRecords carry
+# a deterministic action_ref (JCS RFC 8785 + SHA-256) that any party can
+# independently recompute from the four preimage fields. Trail status tracks
+# the action lifecycle through PENDING → COMMITTED or FAILED states.
+#
+# Spec: https://github.com/giskard09/argentum-core/blob/main/docs/spec/guarantee-model.md
+#       https://github.com/giskard09/argentum-core/blob/main/docs/spec/action-ref.md
+# Endpoint: https://argentum-api.rgiskard.xyz/trails/verify
+# Author: giskard09
+# License: Apache-2.0
+
+system:
+  name: Mycelium Trails
+  home: https://argentum-api.rgiskard.xyz
+  github: https://github.com/giskard09/argentum-core
+  spec: https://github.com/giskard09/argentum-core/blob/main/docs/spec/guarantee-model.md
+  spec_version: "guarantee-model v1.0, action-ref v1.0, May 2026"
+  role: >
+    Tamper-evident trail layer for agent actions. Mycelium records every
+    agent action as a TrailRecord with a deterministic content-addressed
+    identifier (action_ref), anchors the record on-chain (Base mainnet
+    or Arbitrum), and exposes a public verification endpoint. Any verifier
+    holding the four preimage fields can independently recompute the
+    action_ref without querying the operator. The trail status field
+    documents the exact epistemic state of the record at signing time —
+    including degraded states where the signer crashed before recovering
+    a verification reference.
+  identity_layer: "Giskard Marks (ERC-8004 compatible registry, Ed25519 key material)"
+  license: "Apache-2.0"
+
+license: Apache-2.0
+maintainer:
+  github: giskard09
+  confirmed_at: "2026-05-19"
+
+# ─────────────────────────────────────────────────
+# SYSTEM ATTRIBUTES
+# Required triad per CONTRIBUTING.md §4.
+# ─────────────────────────────────────────────────
+system_attributes:
+  signature_capability: "Ed25519 (agent signing keys, Giskard Marks registry) + on-chain anchor (Base mainnet / Arbitrum One)"
+  canonicalization_profile: "JCS RFC 8785 — lexicographic key order, no whitespace, UTF-8"
+  hash_family: "SHA-256 (action_ref derivation + trail content addressing)"
+
+# ─────────────────────────────────────────────────
+# SIGNAL TYPE MAPPINGS
+# ─────────────────────────────────────────────────
+signal_types:
+
+  governance_attestation:
+    mycelium_term: "TrailRecord"
+    mycelium_field: "trail_record"
+    mycelium_definition: >
+      A tamper-evident record of an agent action. Each TrailRecord contains:
+      trail_id (UUID), agent_id, service, operation (action_type), action_ref
+      (SHA-256 of JCS-canonicalized preimage), tx_hash (on-chain anchor,
+      null when not yet anchored), trail_status (COMMITTED / PENDING / FAILED),
+      and preimage fields for independent recomputation. Records are anchored
+      on Base mainnet or Arbitrum One; the tx_hash is the follow-up verification
+      reference any auditor can query without trusting the operator.
+    mapping: structural
+    notes: >
+      Structural match — TrailRecord answers the same governance question as
+      Nobulex ActionLog (did this action occur, tamper-evidently, with an
+      independently verifiable record?) from a different architectural surface.
+      Nobulex records enforcement decisions at runtime (self-evaluated, binding);
+      Mycelium records action outcomes post-execution with on-chain anchoring.
+      Both are independently replayable; neither requires trusting the operator's
+      logs. The two layers compose: a verifier who finds a TrailRecord (what
+      happened) AND a Nobulex ActionLog entry (whether it was permitted) for the
+      same action_ref can assert the action both occurred and was compliant.
+    verification_surface: "https://argentum-api.rgiskard.xyz/trails/verify?agent_id=<id>&action_ref=<ref>"
+    signed_shapes:
+      committed:
+        fields: ["trail_id", "agent_id", "service", "operation", "action_ref",
+                 "tx_hash", "trail_status", "preimage"]
+        anchoring: "tx_hash is a Base mainnet or Arbitrum One transaction hash. Any verifier can replay from a public RPC node."
+      pending:
+        fields: ["trail_id", "agent_id", "service", "operation", "action_ref",
+                 "tx_hash", "trail_status", "preimage"]
+        note: "tx_hash may be non-null (verification handle exists) or null (degraded — signer crashed before recovering reference). See trail_states below."
+      failed:
+        fields: ["trail_id", "agent_id", "service", "operation", "action_ref",
+                 "tx_hash", "trail_status", "preimage"]
+        note: "tx_hash is null. Terminal state — post-execution receipt never arrived."
+
+  behavioral_trust:
+    mycelium_term: null
+    mapping: no_mapping
+    notes: >
+      Mycelium records that an action occurred and anchors it on-chain.
+      It does not evaluate whether the action was compliant with declared
+      behavioral constraints. That layer is addressed by Nobulex (covenant
+      enforcement) or similar systems. Complementary, not overlapping.
+
+  security_posture:
+    mycelium_term: null
+    mapping: no_mapping
+    notes: >
+      Mycelium does not assess artifact or repository governance. It records
+      action outcomes at the trail layer. Out of scope.
+
+  trust_verification:
+    mycelium_term: null
+    mapping: no_mapping
+    notes: >
+      Mycelium does not produce identity verification status assessments.
+      Agent identity is established via Giskard Marks (ERC-8004 compatible);
+      Mycelium trails reference agent_id as an opaque string. Verification
+      of the identity layer is a separate concern.
+
+  passport_grade:
+    mycelium_term: null
+    mapping: no_mapping
+    notes: >
+      Mycelium does not issue composite trust grades. It records individual
+      action trails. A downstream system could aggregate trail history into
+      a reputation score; Mycelium itself does not.
+
+  wallet_state:
+    mycelium_term: null
+    mapping: no_mapping
+    notes: >
+      Mycelium records agent actions generically. It does not specialize in
+      wallet state. The on-chain anchor (tx_hash) is a trail record anchor,
+      not a wallet state assertion.
+
+  wallet_intelligence:
+    mycelium_term: null
+    mapping: no_mapping
+    notes: >
+      No wallet-pattern analysis. Out of scope.
+
+  reasoning_integrity:
+    mycelium_term: null
+    mapping: no_mapping
+    notes: >
+      Mycelium does not attest to model-level reasoning quality. It records
+      what the agent did, not how it reasoned. Distinct governance surfaces.
+
+  compliance_risk:
+    mycelium_term: null
+    mapping: no_mapping
+    notes: >
+      Mycelium does not produce scored compliance risk assessments. It
+      provides the trail evidence from which a downstream system could
+      compute risk.
+
+  job_performance:
+    mycelium_term: null
+    mapping: no_mapping
+    notes: >
+      Mycelium does not assess task completion quality. Out of scope.
+
+  settlement_witness:
+    mycelium_term: null
+    mapping: no_mapping
+    notes: >
+      Mycelium TrailRecords can serve as evidence in a settlement context
+      (the trail proves the action occurred), but Mycelium does not natively
+      bind trail records to payment or escrow release. The trail layer and
+      the settlement layer are separate.
+
+# ─────────────────────────────────────────────────
+# ACTION_REF DERIVATION
+# Canonical linking key — any party can recompute independently.
+# ─────────────────────────────────────────────────
+action_ref_derivation:
+  algorithm: "SHA-256(JCS(preimage))"
+  canonicalization: "RFC 8785 JCS — lexicographic key order, no whitespace, UTF-8"
+  key_order: ["action_type", "agent_id", "scope", "timestamp"]
+  timestamp_format: "RFC 3339 UTC, 3-digit millisecond precision — e.g. '2026-05-15T10:00:00.123Z'. Trailing Z mandatory."
+  output: "SHA-256 hex digest, 64 lowercase characters"
+  reference_impl: "https://github.com/giskard09/argentum-core/blob/main/plugins/agt_evidence_anchor/action_ref.py"
+  example:
+    input:
+      agent_id: "nexus-agent-xa12.onrender.com"
+      action_type: "oracle.signal"
+      scope: "BTC"
+      timestamp: "2025-05-18T11:40:31.000Z"
+    jcs_payload: '{"action_type":"oracle.signal","agent_id":"nexus-agent-xa12.onrender.com","scope":"BTC","timestamp":"2025-05-18T11:40:31.000Z"}'
+    action_ref: "fdd7f810499f06be24355ca8e2bfb8c4b965cc80c838f41fa074683443d89f5a"
+    verified_by: "andysalvo verifier (x402-foundation, ec7201a)"
+  cross_system_note: >
+    The same action_ref is computable from a Mycelium TrailRecord, a Nobulex
+    receipt, a SafeAgent claim (argentum-core#7), or a NEXUS oracle receipt.
+    No trust in any one system required — any party with the four preimage
+    fields can independently recompute and cross-validate.
+
+# ─────────────────────────────────────────────────
+# TRAIL STATES
+# Epistemic states of a TrailRecord — semantics exact per spec.
+# ─────────────────────────────────────────────────
+trail_states:
+  - status: "COMMITTED"
+    tx_hash: "non-null"
+    terminal: true
+    description: >
+      Execution completed. On-chain anchor exists. tx_hash is a Base mainnet
+      or Arbitrum One transaction hash — any auditor can query the chain
+      directly without trusting the operator's logs. A verifier who finds
+      a COMMITTED TrailRecord AND a COMMITTED SafeAgent claim for the same
+      action_ref can assert the action ran exactly once AND the outcome is
+      tamper-evident.
+    externally_verifiable: true
+
+  - status: "PENDING/non-null"
+    tx_hash: "non-null"
+    terminal: false
+    description: >
+      External call started, outcome not yet verified. The signer recovered
+      the verification reference before the session ended. A follow-up
+      verifier can query tx_hash directly. Resolves to COMMITTED when the
+      post-execution receipt arrives, or FAILED if the TTL expires.
+    externally_verifiable: true
+
+  - status: "PENDING/null (degraded)"
+    tx_hash: "null"
+    terminal: false
+    description: >
+      Signer crashed before recovering the verification reference. Effect
+      may have crossed the boundary, but the signer has nothing to hand
+      off. The honest record: 'I started; I do not know if it landed; I
+      have nothing to hand off.' Distinct from FAILED — execution may have
+      succeeded. Externally unverifiable without operator logs.
+    externally_verifiable: false
+
+  - status: "FAILED"
+    tx_hash: "null"
+    terminal: true
+    description: >
+      Terminal. Execution did not complete OR post-execution receipt never
+      arrived within TTL. Distinct from PENDING/null: FAILED is terminal
+      (no recovery). The absence of tx_hash is itself verifiable — a verifier
+      querying by action_ref gets this record and can assert the action did
+      not produce a tamper-evident outcome.
+    externally_verifiable: true
+
+# ─────────────────────────────────────────────────
+# VERIFICATION
+# ─────────────────────────────────────────────────
+verification:
+  endpoint: "https://argentum-api.rgiskard.xyz/trails/verify"
+  auth: "none — public endpoint"
+  query_params:
+    - name: "agent_id"
+      required: true
+    - name: "action_ref"
+      required: true
+  example_curl: "curl 'https://argentum-api.rgiskard.xyz/trails/verify?agent_id=nobulex-gogani&action_ref=31ddbd9f89f0e54700744addc7fa23f41518cf8c9d63d206e6da5cc3669defdd'"
+  response_committed: |
+    {
+      "verified": true,
+      "trail_id": "<uuid>",
+      "trail_status": "committed",
+      "tx_hash": "<base-mainnet-tx-hash>",
+      "timestamp": "<rfc3339>",
+      "service": "<service>",
+      "operation": "<action_type>"
+    }
+  response_not_found: |
+    {"verified": false, "block": null, "tx_hash": null, "timestamp": null}
+  conformance_fixtures: "https://github.com/giskard09/argentum-core/tree/main/examples/conformance"
+
+# ─────────────────────────────────────────────────
+# DESCRIPTOR DIMENSIONS
+# ─────────────────────────────────────────────────
+descriptor_dimensions:
+  enforcement_class: "advisory"
+  note_enforcement: >
+    Mycelium records that an action occurred — it does not prevent actions
+    from executing. The trail is produced post-execution (or at claim time
+    for pre-execution receipts). Enforcement is the responsibility of a
+    separate layer (e.g. Nobulex).
+
+  validity_temporal: "point_in_time"
+  note_validity: >
+    Each TrailRecord captures the state of one action at one point in time.
+    The COMMITTED status is permanent once anchored on-chain. PENDING records
+    resolve to COMMITTED or FAILED as subsequent events arrive.
+
+  refusal_authority: "none"
+  note_refusal: >
+    Mycelium does not refuse actions. It records them. The trail layer
+    provides evidence; the enforcement layer provides refusals.
+
+  invariant_survival: "permanent"
+  note_invariant: >
+    COMMITTED TrailRecords are anchored on-chain and immutable. The on-chain
+    anchor (tx_hash) survives past the operator's database — any party with
+    the transaction hash can verify the anchor from a public RPC node.
+
+  replay_class: "partial_replay"
+  note_replay: >
+    Any verifier with the four preimage fields can independently recompute
+    the action_ref and verify it matches the TrailRecord. The on-chain anchor
+    is independently verifiable. Full execution replay (re-running the action
+    to verify its output) is not provided by Mycelium — that is the
+    responsibility of the system that executed the action.
+
+  governed_action_class: ["read", "write", "transfer", "delegate", "publish", "compose"]
+  note_governed: >
+    Mycelium records arbitrary action types. The action_type field is an
+    opaque semantic label (e.g. 'payment.send', 'oracle.signal', 'file:write').
+    All canonical action classes can be expressed as action_type values.
+
+# ─────────────────────────────────────────────────
+# IDENTITY METHOD
+# ─────────────────────────────────────────────────
+identity:
+  method: "Giskard Marks (ERC-8004 compatible identity registry)"
+  agent_id_field: "agent_id (opaque string — stable identifier per agent)"
+  key_material: "Ed25519 (agent signing keys registered in Giskard Marks)"
+  signing: "Ed25519 detached signatures, optional per-request"
+  on_chain: "Arbitrum One (Giskard Marks contract: 0xEdB809058d146d41bA83cCbE085D51a75af0ACb7)"
+  note: >
+    agent_id in TrailRecords is an opaque stable string. Mycelium does not
+    require agent_id to be a DID — it can be a DID, a domain, or any stable
+    opaque identifier. The identity layer (Giskard Marks) resolves the agent_id
+    to a public key when Ed25519 signing is used.
