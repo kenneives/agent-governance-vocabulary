@@ -1,0 +1,109 @@
+# crosswalk/pulsefeed.yaml
+#
+# Maps PulseFeed's name-custody observation feed to the canonical vocabulary
+# in vocabulary.yaml. PulseFeed is an external observer, not an issuer of
+# verdicts about agents: it re-audits the official MCP registry and the top
+# npm packages carrying MCP keywords once a day and records what changed in
+# who controls a *name* after it was adopted — publishing set, declared
+# source repository, registry presence. Each record is an observation with
+# a detection interval, not an attestation about the subject's quality.
+#
+# Written in response to kenneives' request in
+# Nikolife2016/mcp-drift-action#1 for a crosswalk row covering the three
+# change classes (maintainer-set change, repository owner change, registry
+# delisting with namespace change).
+
+system:
+  name: PulseFeed
+  home: https://pulsefeed.dev
+  repo: https://github.com/Nikolife2016/mcp-drift-action
+  spec: https://pulsefeed.dev/evidence/name-custody.json
+  dataset_doi: "10.5281/zenodo.22251005"   # concept DOI, resolves to the latest version
+  role: >
+    Daily external re-audit of the official MCP registry (~26,000 entries)
+    and ~3,300 npm packages ranked for MCP keywords. Emits a dated,
+    interval-censored event feed of custody changes with a matched baseline
+    of 41,286 adjacent audit intervals, so "changed without a release" can
+    be tested against how often any comparable interval is silent. Ships a
+    GitHub Action (`mcp-drift-action`) that fails a build when a dependency's
+    custody changed after adoption.
+
+license: CC-BY-4.0   # dataset; Action and code MIT
+
+maintainer:
+  github: Nikolife2016
+  confirmed_at: "2026-09-18"
+
+issuer: "https://pulsefeed.dev"   # no DID; identity is the Ed25519 key published at /.well-known/manifest-signing-key.json
+
+system_attributes:
+  signature_capability: classical
+  canonicalization_profile: implementation-defined
+  hash_family: sha-256
+  notes: >
+    The signature (Ed25519) is over the raw byte string of the daily
+    manifest, not over a canonical form; any re-serialization of the
+    manifest invalidates it. Per-event identity is a content hash over a
+    fixed eight-field tuple joined with U+001F (published as `idRecipe`
+    in the feed), which is stable under re-serialization but is not JCS.
+    Verdict-like fields (severity) are not in that preimage. Both gaps are
+    recorded here rather than papered over; see the conformance run in
+    Nikolife2016/mcp-drift-action#1.
+
+# ─────────────────────────────────────────────────
+# SIGNAL TYPE MAPPINGS
+# ─────────────────────────────────────────────────
+mappings:
+
+  - canonical: entity_continuity
+    internal: maintainer_changed
+    match: partial
+    evidence: emitted
+    source_path: "events[].type == 'maintainer_changed'; events[].from; events[].to"
+    notes: >
+      Inverse of the canonical signal. entity_continuity proves the same
+      identity persists across an infrastructure change; this event records
+      that the set of accounts allowed to publish under an npm name changed
+      between two daily observations, with the before/after sets. It does
+      not distinguish onboarding from account takeover — from outside they
+      look identical — which is why it is an observation, not a verdict.
+      Subject is the package name, not an agent DID.
+
+  - canonical: entity_continuity
+    internal: repo_changed
+    match: partial
+    evidence: emitted
+    source_path: "events[].type == 'repo_changed'; events[].from; events[].to"
+    notes: >
+      The declared source repository URL changed. Owner change is inferable
+      from the URL pair (github.com/A/x -> github.com/B/x); the feed does not
+      assert it as a separate field. Of 77 such changes in the frozen deposit,
+      33 changed owner and 27 of those kept the repository name.
+
+  - canonical: entity_continuity
+    internal: unpublished
+    match: partial
+    evidence: emitted
+    source_path: "events[].type == 'unpublished'"
+    notes: >
+      A registry entry was deleted. Namespace change on delisting (the name
+      re-appears under a different reverse-DNS namespace) is recorded in the
+      frozen deposit's delisting_check.json, not in the live feed; 19 of 60
+      delisted entries in the deposit changed namespace.
+
+  - canonical: security_posture
+    internal: null
+    match: no_mapping
+    notes: >
+      PulseFeed does not scan artifact contents and issues no score or grade
+      for a package. The MCP drift feed carries install_script_added and
+      provenance_lost as observed changes, but they are diffs, not a posture.
+
+descriptor_dimensions:
+  enforcement_class: advisory          # the Action fails a build only if the consumer sets fail-on
+  validity_temporal: windowed          # each event carries its detection interval (9.1 to 168 h)
+  refusal_authority: consumer_policy
+  invariant_survival: post_action      # observed after the change, never before
+  replay_class: full_replay            # daily snapshots and a signed manifest allow recomputation
+  governed_action_class: publish
+  measurement_point: mutation_boundary
