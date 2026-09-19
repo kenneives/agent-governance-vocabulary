@@ -40,15 +40,19 @@ system_attributes:
   signature_capability: classical
   canonicalization_profile: implementation-defined
   hash_family: sha-256
-  notes: >
-    The signature (Ed25519) is over the raw byte string of the daily
-    manifest, not over a canonical form; any re-serialization of the
-    manifest invalidates it. Per-event identity is a content hash over a
-    fixed eight-field tuple joined with U+001F (published as `idRecipe`
-    in the feed), which is stable under re-serialization but is not JCS.
-    Verdict-like fields (severity) are not in that preimage. Both gaps are
-    recorded here rather than papered over; see the conformance run in
-    Nikolife2016/mcp-drift-action#1.
+
+# The rule behind `canonicalization_profile: implementation-defined`, kept
+# outside system_attributes because the validator accepts only the three
+# canonical attributes there.
+canonicalization_notes: >
+  The signature (Ed25519) is over the raw byte string of the daily
+  manifest, not over a canonical form; any re-serialization of the
+  manifest invalidates it. Per-event identity is a content hash over a
+  fixed eight-field tuple joined with U+001F (published as `idRecipe`
+  in the feed), which is stable under re-serialization but is not JCS.
+  Verdict-like fields (severity) are not in that preimage. Both gaps are
+  recorded here rather than papered over; see the conformance run in
+  Nikolife2016/mcp-drift-action#1.
 
 # ─────────────────────────────────────────────────
 # SIGNAL TYPE MAPPINGS
